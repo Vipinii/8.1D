@@ -1,78 +1,62 @@
-import React, { useState } from 'react';
-import './App.css';
-import Article_interface from './Article_interface';
-import Question_interface from './Question_interface';
-import Find_interface from './Find_interface';
-function App() {
-  const [selectedOption, setSelectedOption] = useState('Question'); 
+import smbus2
+import time
 
-  const handleOptionChange = (event) => {
-    setSelectedOption(event.target.value);
-  };
+# I2C address of the TSL2561 sensor
+SENSOR_ADDR = 0x39
 
-  return (
-    <div className="App">
-      <h2> New Post</h2>
-      <div className="form-check" style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
-        <span style={{ marginRight: '10px' }}>Select Post Type:</span>
-        <input
-          type="radio"
-          name="postType"
-          id="questionOption"
-          value="Question"
-          checked={selectedOption === 'Question'}
-          onChange={handleOptionChange}
-        />
-        <label className="form-check-label" htmlFor="questionOption" style={{marginRight: '10px'}}>
-          Question
-        </label>
-        <input
-          type="radio"
-          name="postType"
-          id="articleOption"
-          value="Article"
-          checked={selectedOption === 'Article'}
-          onChange={handleOptionChange}
-        />
-        <label className="form-check-label" htmlFor="articleOption" style={{ marginRight: '10px' }}>
-          Article
-        </label>
+# Command bytes for configuring the sensor
+COMMAND_BIT = 0x80
+CONTROL_REG = 0x00
+TIMING_REG = 0x01
+DATA0_REG = 0x0C
+DATA1_REG = 0x0E
 
-        <input
-          type="radio"
-          name="postType"
-          id="JournalOption"
-          value="Journal"
-          checked={selectedOption === 'Journal'}
-          onChange={handleOptionChange}
-        />
-        <label className="form-check-label" htmlFor="articleOption" style={{ marginLeft: '10px' }}>
-        Find a question
-        </label>
+# Light intensity thresholds (you can adjust these values)
+TOO_BRIGHT_THRESHOLD = 8000
+BRIGHT_THRESHOLD = 3000
+MEDIUM_THRESHOLD = 1000
+DARK_THRESHOLD = 100
 
-        
-      </div>
+# Initialize the I2C bus
+bus = smbus2.SMBus(1)  # Use 1 for Raspberry Pi Model B+ and newer, use 0 for older models
 
-      <h2> What do you want to ask or share</h2>
-      <p style={{ textAlign: 'left', marginBottom:'-5px', marginLeft:'200px' }}>
-        This section is designed based on the type of the post. It could be developed by conditional rendering
-      </p>
-      <p style={{ textAlign: 'left', color: 'red',marginTop:'4px' ,marginBottom:'30px',marginLeft:'200px'}}>
-        For post an article, the following section would be appeared.
-      </p>
+def configure_sensor():
+    # Configure the sensor with desired settings (e.g., integration time)
+    bus.write_byte_data(SENSOR_ADDR, COMMAND_BIT | CONTROL_REG, 0x03)  # Power on, ALS enabled
+    bus.write_byte_data(SENSOR_ADDR, COMMAND_BIT | TIMING_REG, 0x02)   # Set integration time to 402ms
 
-      {selectedOption === 'Question' && (
-        <Question_interface />
-      )}
+def read_sensor_data():
+    # Read raw sensor data
+    data0 = bus.read_word_data(SENSOR_ADDR, COMMAND_BIT | DATA0_REG)
+    data1 = bus.read_word_data(SENSOR_ADDR, COMMAND_BIT | DATA1_REG)
+    
+    # Convert raw data to lux
+    full_spectrum = data0 + (data1 << 16)
+    lux = full_spectrum / 65535.0 * 10000.0
+    
+    return lux
 
-      {selectedOption === 'Article' && (
-        <Article_interface />
-      )}
-      {selectedOption === 'Journal' && (
-        <Find_interface />
-      )}
-    </div>
-  );
-}
+def categorize_light_intensity(lux_value):
+    if lux_value > TOO_BRIGHT_THRESHOLD:
+        return "Too Bright"
+    elif lux_value > BRIGHT_THRESHOLD:
+        return "Bright"
+    elif lux_value > MEDIUM_THRESHOLD:
+        return "Medium"
+    elif lux_value > DARK_THRESHOLD:
+        return "Dark"
+    else:
+        return "Too Dark"
 
-export default App;
+if __name__ == "__main__":
+    configure_sensor()
+
+    try:
+        while True:
+            lux = read_sensor_data()
+            category = categorize_light_intensity(lux)
+            print(f"Light Intensity: {lux} lux, Category: {category}")
+            time.sleep(1)
+    
+    except KeyboardInterrupt:
+        pass
