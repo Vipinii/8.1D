@@ -1,62 +1,37 @@
 import smbus2
 import time
 
-# I2C address of the TSL2561 sensor
-SENSOR_ADDR = 0x39
+# Define BH1750 sensor address
+BH1750_ADDR = 0x23
 
-# Command bytes for configuring the sensor
-COMMAND_BIT = 0x80
-CONTROL_REG = 0x00
-TIMING_REG = 0x01
-DATA0_REG = 0x0C
-DATA1_REG = 0x0E
+# Create an instance of the I2C bus
+bus = smbus2.SMBus(1)  # Use 0 for older Raspberry Pi models
 
-# Light intensity thresholds (you can adjust these values)
-TOO_BRIGHT_THRESHOLD = 8000
-BRIGHT_THRESHOLD = 3000
-MEDIUM_THRESHOLD = 1000
-DARK_THRESHOLD = 100
+# Function to read data from the BH1750 sensor
+def read_light_intensity():
+    data = bus.read_i2c_block_data(BH1750_ADDR, 0x20)
+    light_level = int.from_bytes(data, byteorder='big')
+    return light_level
 
-# Initialize the I2C bus
-bus = smbus2.SMBus(1)  # Use 1 for Raspberry Pi Model B+ and newer, use 0 for older models
+try:
+    while True:
+        light_level = read_light_intensity()
 
-def configure_sensor():
-    # Configure the sensor with desired settings (e.g., integration time)
-    bus.write_byte_data(SENSOR_ADDR, COMMAND_BIT | CONTROL_REG, 0x03)  # Power on, ALS enabled
-    bus.write_byte_data(SENSOR_ADDR, COMMAND_BIT | TIMING_REG, 0x02)   # Set integration time to 402ms
+        if light_level > 15000:
+            print("Too Bright")
+        elif light_level > 5000:
+            print("Bright")
+        elif light_level > 2000:
+            print("Medium")
+        elif light_level > 500:
+            print("Dark")
+        else:
+            print("Too Dark")
 
-def read_sensor_data():
-    # Read raw sensor data
-    data0 = bus.read_word_data(SENSOR_ADDR, COMMAND_BIT | DATA0_REG)
-    data1 = bus.read_word_data(SENSOR_ADDR, COMMAND_BIT | DATA1_REG)
-    
-    # Convert raw data to lux
-    full_spectrum = data0 + (data1 << 16)
-    lux = full_spectrum / 65535.0 * 10000.0
-    
-    return lux
+        time.sleep(1)  # Read data every 1 second
 
-def categorize_light_intensity(lux_value):
-    if lux_value > TOO_BRIGHT_THRESHOLD:
-        return "Too Bright"
-    elif lux_value > BRIGHT_THRESHOLD:
-        return "Bright"
-    elif lux_value > MEDIUM_THRESHOLD:
-        return "Medium"
-    elif lux_value > DARK_THRESHOLD:
-        return "Dark"
-    else:
-        return "Too Dark"
+except KeyboardInterrupt:
+    pass
 
-if __name__ == "__main__":
-    configure_sensor()
-
-    try:
-        while True:
-            lux = read_sensor_data()
-            category = categorize_light_intensity(lux)
-            print(f"Light Intensity: {lux} lux, Category: {category}")
-            time.sleep(1)
-    
-    except KeyboardInterrupt:
-        pass
+finally:
+    print("Exiting...")
