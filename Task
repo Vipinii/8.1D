@@ -1,37 +1,34 @@
-import smbus2
+import smbus
 import time
 
 # Define BH1750 sensor address
 BH1750_ADDR = 0x23
 
 # Create an instance of the I2C bus
-bus = smbus2.SMBus(1)  # Use 0 for older Raspberry Pi models
+bus = smbus.SMBus(1)  
 
 # Function to read data from the BH1750 sensor
 def read_light_intensity():
-    data = bus.read_i2c_block_data(BH1750_ADDR, 0x20)
-    light_level = int.from_bytes(data, byteorder='big')
-    return light_level
+    bus.write_byte(BH1750_ADDR, 0x20)
+    time.sleep(0.2)
+    data = bus.read_i2c_block_data(BH1750_ADDR, 0x00, 2)
+    lux = int((data[1] + (256 * data[0])) / 1.2)
+    return lux
 
-try:
-    while True:
-        light_level = read_light_intensity()
+def BrightnessLevel(lux):
+    if lux > 1200:
+        return "Too Bright"
+    elif 700 < lux <= 1200:
+        return "Bright"
+    elif 300 < lux <= 700:
+        return "Medium"
+    elif 100 < lux <= 300:
+        return "Dark"
+    else:
+        return "Too Dark"
 
-        if light_level > 15000:
-            print("Too Bright")
-        elif light_level > 5000:
-            print("Bright")
-        elif light_level > 2000:
-            print("Medium")
-        elif light_level > 500:
-            print("Dark")
-        else:
-            print("Too Dark")
-
-        time.sleep(1)  # Read data every 1 second
-
-except KeyboardInterrupt:
-    pass
-
-finally:
-    print("Exiting...")
+while True:
+    lux = read_light_intensity()
+    brightness = BrightnessLevel(lux)
+    print(f"Light Intensity: {lux} lux - {brightness}")
+    time.sleep(1)  # Read data every 1 second
